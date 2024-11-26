@@ -1,4 +1,4 @@
-web: gunicorn app:create_app
+web: gunicorn my_app:create_app
 
 
 
