@@ -2,6 +2,7 @@ from app.__init__ import create_app, db
 from flask_migrate import Migrate
 from flask.cli import AppGroup
 import click  # Importing click
+from waitress import serve  # Importing waitress
 
 # Initialize the app and migrate instance
 app = create_app()
@@ -31,3 +32,7 @@ def upgrade_command():
     """Apply the latest migration."""
     from flask_migrate import upgrade
     upgrade()
+
+# Start the app using Waitress if this script is executed directly
+if __name__ == "__main__":
+    serve(app, host='0.0.0.0', port=5000)
