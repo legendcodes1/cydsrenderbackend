@@ -5,7 +5,7 @@ from flask_cors import CORS  # Import CORS
 from flask_migrate import Migrate
 import click  # Importing click
 from dotenv import load_dotenv  # Import load_dotenv
-from waitress import serve  # Importing waitress
+
 
 # Load environment variables from .env file (for local development only)
 load_dotenv()
@@ -72,6 +72,3 @@ def create_app():
 # Create the app instance
 app = create_app()
 
-# Start the app using Waitress if this script is executed directly
-if __name__ == "__main__":
-    serve(app, host='0.0.0.0', port=5000)
