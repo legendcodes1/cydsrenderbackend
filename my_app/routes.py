@@ -339,9 +339,9 @@ def create_booking():
         with db.session.begin():
             # Add the new booking
             db.session.add(new_booking)
-            db.session.commit()
+            db.session.flush()  # This ensures booking_id is populated before commit
 
-            # Booking ID is generated after commit
+            # Booking ID is now accessible after flush
             booking_id = new_booking.booking_id
 
             # Create the calendar event
@@ -365,12 +365,13 @@ def create_booking():
             if calendar_event_id:
                 # Save the event_id to the booking
                 new_booking.event_id = calendar_event_id
-                db.session.commit()
+                db.session.commit()  # Commit to save event_id to the booking
 
         return jsonify(new_booking.to_dict()), 201
     except IntegrityError:
         db.session.rollback()
         return jsonify({'error': 'Failed to add booking.'}), 400
+
 
     
 # Edit an existing booking
