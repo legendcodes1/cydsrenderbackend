@@ -287,7 +287,7 @@ def get_booking(booking_id):
 @main.route('/bookings', methods=['POST'])
 def create_booking():
     data = request.json
-    print(f"Received data in POST request: {data}")  # Log the incoming data
+    print(f"Received data in POST request: {data}")
 
     # Validate required fields
     required_fields = [
@@ -300,23 +300,19 @@ def create_booking():
             return jsonify({'error': f'Missing required field: {field}'}), 400
 
     try:
-        # Parse the requested_date (this is still a date field)
+        # Parse the requested_date
         requested_date = datetime.strptime(data['requested_date'], '%Y-%m-%d').date()
 
-        # Parse start_time and end_time, and extract only the time part (without date and timezone)
+        # Parse start_time and end_time
         start_time = parser.isoparse(data['start_time']) if data['start_time'] else None
         end_time = parser.isoparse(data['end_time']) if data['end_time'] else None
 
-        # Extract just the time from the datetime object (in %H:%M:%S format)
+        # Validate times
+        if not start_time or not end_time:
+            return jsonify({'error': 'Both start_time and end_time must be provided and valid.'}), 400
+
         start_time_str = start_time.strftime('%H:%M:%S') if start_time else None
         end_time_str = end_time.strftime('%H:%M:%S') if end_time else None
-
-        # Log the parsed times to ensure correct parsing
-        print(f"Parsed start_time: {start_time_str}, Parsed end_time: {end_time_str}")
-
-        # Validate that start_time and end_time are not None
-        if not start_time_str or not end_time_str:
-            return jsonify({'error': 'Both start_time and end_time must be provided and valid.'}), 400
 
         print(f"Start time: {start_time_str}, End time: {end_time_str}, Requested date: {requested_date}")
 
@@ -324,7 +320,7 @@ def create_booking():
         print("Parsing error:", str(e))
         return jsonify({'error': 'Invalid date or time format.'}), 400
 
-    # Create the new booking object with the datetime and timezone-aware start_time and end_time
+    # Create the booking object
     new_booking = Booking(
         requested_date=requested_date,
         event_location=data['event_location'],
@@ -339,34 +335,43 @@ def create_booking():
     )
 
     try:
-        db.session.add(new_booking)
-        db.session.commit()
-        print("Booking added to the session")
+        # Start a transaction to ensure both booking and calendar creation are atomic
+        with db.session.begin():
+            # Add the new booking
+            db.session.add(new_booking)
+            db.session.commit()
 
-        # Now the booking_id is correctly assigned after the commit
-        booking_id = new_booking.booking_id
+            # Booking ID is generated after commit
+            booking_id = new_booking.booking_id
 
-        # Create the associated calendar event with start_time and end_time included
-        calendar_data = {
-            'event_date': requested_date.strftime('%Y-%m-%d'),  # Convert date to string
-            'event_status': 'Pending',  # Default event status
-            'event_type': data['event_type'],
-            'start_time': start_time_str,  # Send just the time part in %H:%M:%S format
-            'end_time': end_time_str,      # Send just the time part in %H:%M:%S format
-            'booking_id': booking_id
-        }
+            # Create the calendar event
+            calendar_data = {
+                'event_date': requested_date.strftime('%Y-%m-%d'),
+                'event_status': 'Pending',
+                'event_type': data['event_type'],
+                'start_time': start_time_str,
+                'end_time': end_time_str,
+                'booking_id': booking_id
+            }
 
-        # Make the POST request to the calendar service
-        calendar_response = requests.post("https://cydsrenderbackend.onrender.com/calendar", json=calendar_data)
-        if calendar_response.status_code != 200:
-            print("Failed to create calendar event:", calendar_response.text)
+            # Post the calendar event creation
+            calendar_response = requests.post("https://cydsrenderbackend.onrender.com/calendar", json=calendar_data)
+            if calendar_response.status_code != 200:
+                db.session.rollback()  # Rollback if calendar event creation fails
+                return jsonify({'error': 'Failed to create calendar event'}), 400
+
+            # Assuming the calendar response includes an event_id
+            calendar_event_id = calendar_response.json().get('event_id')
+            if calendar_event_id:
+                # Save the event_id to the booking
+                new_booking.event_id = calendar_event_id
+                db.session.commit()
 
         return jsonify(new_booking.to_dict()), 201
     except IntegrityError:
         db.session.rollback()
         return jsonify({'error': 'Failed to add booking.'}), 400
 
-    
     
 # Edit an existing booking
 @main.route('/bookings/<int:booking_id>', methods=['PUT'])
@@ -679,6 +684,7 @@ def delete_booking_and_calendar(booking_id):
     try:
         # Start a transaction
         with db.session.begin():
+            # Get the booking
             booking = Booking.query.get(booking_id)
             if not booking:
                 return jsonify({"error": "Booking not found"}), 404
@@ -695,6 +701,7 @@ def delete_booking_and_calendar(booking_id):
             db.session.commit()
         
         return jsonify({"message": "Booking and associated calendar events deleted successfully"}), 200
+    
     except SQLAlchemyError as e:
         db.session.rollback()  # Rollback in case of an error
-        return jsonify({"error": "Error deleting booking and calendar event"}), 500
+        return jsonify({"error": f"Error deleting booking and calendar event: {str(e)}"}), 500

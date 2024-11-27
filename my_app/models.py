@@ -46,7 +46,8 @@ class Booking(db.Model):
     number_of_guests = db.Column(db.Integer)
     bid_status = db.Column(db.String)
     user_id = db.Column(db.Integer, db.ForeignKey('User.user_id'))
-    
+    event_id = db.Column(db.BigInteger, db.ForeignKey('calendar.event_id'), nullable=True)
+
     # Change to DateTime with timezone
     start_time = db.Column(db.DateTime(timezone=True), nullable=False)
     end_time = db.Column(db.DateTime(timezone=True), nullable=False)
@@ -66,7 +67,8 @@ class Booking(db.Model):
             'user_id': self.user_id,
             'start_time': self.start_time.isoformat() if self.start_time else None,  # ISO format with timezone
             'end_time': self.end_time.isoformat() if self.end_time else None,  # ISO format with timezone
-            'service_type': self.service_type
+            'service_type': self.service_type,
+            'event_id': self.event_id # Set the event_id if provided
         }
     
 class Service(db.Model):
