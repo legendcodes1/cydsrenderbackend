@@ -161,7 +161,7 @@ class Calendar(db.Model):
     booking_id = db.Column(db.Integer, db.ForeignKey('Bookings.booking_id'))
     
     # Relationship to the Booking model
-    booking = db.relationship('Booking', backref='calendar', uselist=False)  # Adds 'booking' attribute to access Booking object
+    booking = db.relationship('Booking', backref='calendar', uselist=False, foreign_keys=[booking_id])  # Explicit foreign key
 
     # Change to DateTime with timezone
     start_time = db.Column(db.DateTime(timezone=True))  # Change to DateTime
