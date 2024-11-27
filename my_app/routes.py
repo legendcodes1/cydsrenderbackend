@@ -733,11 +733,11 @@ def delete_booking_and_calendar(booking_id):
             for calendar_event in calendar_events:
                 try:
                     db.session.delete(calendar_event)
-                    logger.info(f"Deleted calendar event with ID {calendar_event.id} for booking {booking_id}")
+                    logger.info(f"Deleted calendar event with ID {calendar_event.event_id} for booking {booking_id}")
                 except Exception as e:
-                    logger.error(f"Error deleting calendar event {calendar_event.id} for booking {booking_id}: {str(e)}")
+                    logger.error(f"Error deleting calendar event {calendar_event.event_id} for booking {booking_id}: {str(e)}")
                     db.session.rollback()
-                    return jsonify({"error": f"Error deleting calendar event {calendar_event.id}: {str(e)}"}), 500
+                    return jsonify({"error": f"Error deleting calendar event {calendar_event.event_id}: {str(e)}"}), 500
 
             # Step 2: Now, delete the booking itself
             try:
@@ -767,7 +767,6 @@ def delete_booking_and_calendar(booking_id):
     except Exception as e:
         logger.error(f"Unexpected error occurred while deleting booking {booking_id}: {str(e)}")
         return jsonify({"error": f"Unexpected error: {str(e)}"}), 500
-
 
 
 @main.route('/<path:path>', methods=['OPTIONS'])
