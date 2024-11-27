@@ -48,7 +48,7 @@ class Booking(db.Model):
     user_id = db.Column(db.Integer, db.ForeignKey('User.user_id'))
     
     event_id = db.Column(db.Integer, db.ForeignKey('Calendar.event_id'), nullable=True)
-    
+
     # Change to DateTime with timezone
     start_time = db.Column(db.DateTime(timezone=True), nullable=False)
     end_time = db.Column(db.DateTime(timezone=True), nullable=False)
@@ -148,7 +148,6 @@ class CateringBid(db.Model):
             'booking_id': self.booking_id,
         }
 
-
 class Calendar(db.Model):
     __tablename__ = 'Calendar'
     
@@ -160,8 +159,8 @@ class Calendar(db.Model):
     user_id = db.Column(db.Integer, db.ForeignKey('User.user_id'))
     booking_id = db.Column(db.Integer, db.ForeignKey('Bookings.booking_id'))
     
-    # Relationship to the Booking model
-    booking = db.relationship('Booking', backref='calendar', uselist=False)  # Adds 'booking' attribute to access Booking object
+    # Relationship to the Booking model with cascade delete
+    booking = db.relationship('Booking', backref='calendar', uselist=False, cascade='all, delete-orphan')
 
     # Change to DateTime with timezone
     start_time = db.Column(db.DateTime(timezone=True))  # Change to DateTime
