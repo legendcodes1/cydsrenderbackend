@@ -709,6 +709,8 @@ def register():
 @main.route('/bookings_and_calendar/<int:booking_id>', methods=['DELETE'])
 def delete_booking_and_calendar(booking_id):
     try:
+        logger.info(f"Attempting to delete booking with ID {booking_id}")
+        
         # Start a transaction
         with db.session.begin():
             # Get the booking
@@ -716,28 +718,63 @@ def delete_booking_and_calendar(booking_id):
             if not booking:
                 logger.error(f"Booking {booking_id} not found in the database")
                 return jsonify({"error": "Booking not found"}), 404
+            else:
+                logger.info(f"Booking {booking_id} found in the database")
 
             # Fetch associated calendar events for the booking
             calendar_events = Calendar.query.filter_by(booking_id=booking_id).all()
             if not calendar_events:
                 logger.error(f"No calendar events found for booking {booking_id}")
                 return jsonify({"error": "No associated calendar events found"}), 404
-            
+            else:
+                logger.info(f"Found {len(calendar_events)} associated calendar events for booking {booking_id}")
+
             # Step 1: Delete all associated calendar events first
             for calendar_event in calendar_events:
-                db.session.delete(calendar_event)
-            
+                try:
+                    db.session.delete(calendar_event)
+                    logger.info(f"Deleted calendar event with ID {calendar_event.id} for booking {booking_id}")
+                except Exception as e:
+                    logger.error(f"Error deleting calendar event {calendar_event.id} for booking {booking_id}: {str(e)}")
+                    db.session.rollback()
+                    return jsonify({"error": f"Error deleting calendar event {calendar_event.id}: {str(e)}"}), 500
+
             # Step 2: Now, delete the booking itself
-            db.session.delete(booking)
+            try:
+                db.session.delete(booking)
+                logger.info(f"Deleted booking with ID {booking_id}")
+            except Exception as e:
+                logger.error(f"Error deleting booking {booking_id}: {str(e)}")
+                db.session.rollback()
+                return jsonify({"error": f"Error deleting booking: {str(e)}"}), 500
 
             # Commit the transaction to apply both deletions
-            db.session.commit()
-        
-        logger.info(f"Booking {booking_id} and associated calendar events deleted successfully")
+            try:
+                db.session.commit()
+                logger.info(f"Successfully committed changes for booking {booking_id} and its calendar events")
+            except Exception as e:
+                logger.error(f"Error committing the transaction for booking {booking_id}: {str(e)}")
+                db.session.rollback()
+                return jsonify({"error": f"Error committing changes for booking: {str(e)}"}), 500
+
         return jsonify({"message": "Booking and associated calendar events deleted successfully"}), 200
 
     except SQLAlchemyError as e:
         # Rollback in case of an error
         db.session.rollback()  
-        logger.error(f"Error deleting booking and calendar event: {str(e)}")
-        return jsonify({"error": f"Error deleting booking and calendar event: {str(e)}"}), 500
+        logger.error(f"SQLAlchemyError during the deletion of booking {booking_id} and calendar events: {str(e)}")
+        return jsonify({"error": f"SQLAlchemyError during the deletion: {str(e)}"}), 500
+    except Exception as e:
+        logger.error(f"Unexpected error occurred while deleting booking {booking_id}: {str(e)}")
+        return jsonify({"error": f"Unexpected error: {str(e)}"}), 500
+
+
+
+@main.route('/<path:path>', methods=['OPTIONS'])
+def handle_options(path):
+    response = main.make_response('')
+    response.headers['Access-Control-Allow-Origin'] = 'https://cydsfinalfrontend.vercel.app'  # Adjust this as needed
+    response.headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE, OPTIONS'
+    response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
+    response.status_code = 200
+    return response

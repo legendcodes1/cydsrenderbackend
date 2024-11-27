@@ -27,10 +27,12 @@ def create_app():
     # Enable CORS for your frontend origin
   # Corrected CORS configuration
     CORS(app, resources={r"/*": {
-        "origins": ["http://localhost:5173", "https://cydsfinalfrontend.vercel.app"],  # List of allowed origins
-        "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-        "allow_headers": ["Content-Type"]
-    }})
+    "origins": ["http://localhost:5173", "https://cydsfinalfrontend.vercel.app"],  # List of allowed origins
+    "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    "allow_headers": ["Content-Type", "Authorization"],
+    "supports_credentials": True
+}})
+
 
     with app.app_context():
         from . import routes  # Import routes module
