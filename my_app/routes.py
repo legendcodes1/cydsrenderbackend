@@ -9,7 +9,13 @@ from dateutil import parser
 import requests
 from werkzeug.security import check_password_hash
 import logging
-logging.basicConfig(level=logging.DEBUG)
+
+
+logging.basicConfig(
+    level=logging.DEBUG,  # You can set this to INFO, WARNING, or ERROR as needed
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+)
+logger = logging.getLogger(__name__)  # Use the current module name for the logger
 
 main = Blueprint('main', __name__)
 
@@ -283,11 +289,10 @@ def get_booking(booking_id):
     else:
         return jsonify({"error": "Booking not found"}), 404
 
-    
 @main.route('/bookings', methods=['POST'])
 def create_booking():
     data = request.json
-    print(f"Received data in POST request: {data}")
+    logging.info(f"Received data in POST request: {data}")
 
     # Validate required fields
     required_fields = [
@@ -295,13 +300,16 @@ def create_booking():
         'number_of_guests', 'bid_status', 'user_id', 'service_type',
         'start_time', 'end_time'
     ]
+    
     for field in required_fields:
         if field not in data:
+            logging.error(f"Missing required field: {field}")
             return jsonify({'error': f'Missing required field: {field}'}), 400
-
+    
     try:
         # Parse the requested_date
         requested_date = datetime.strptime(data['requested_date'], '%Y-%m-%d').date()
+        logging.debug(f"Parsed requested_date: {requested_date}")
 
         # Parse start_time and end_time
         start_time = parser.isoparse(data['start_time']) if data['start_time'] else None
@@ -309,30 +317,36 @@ def create_booking():
 
         # Validate times
         if not start_time or not end_time:
+            logging.error("Both start_time and end_time must be provided and valid.")
             return jsonify({'error': 'Both start_time and end_time must be provided and valid.'}), 400
 
         start_time_str = start_time.strftime('%H:%M:%S') if start_time else None
         end_time_str = end_time.strftime('%H:%M:%S') if end_time else None
 
-        print(f"Start time: {start_time_str}, End time: {end_time_str}, Requested date: {requested_date}")
+        logging.debug(f"Start time: {start_time_str}, End time: {end_time_str}, Requested date: {requested_date}")
 
     except ValueError as e:
-        print("Parsing error:", str(e))
+        logging.error(f"Parsing error: {str(e)}")
         return jsonify({'error': 'Invalid date or time format.'}), 400
 
     # Create the booking object
-    new_booking = Booking(
-        requested_date=requested_date,
-        event_location=data['event_location'],
-        event_type=data['event_type'],
-        customer_id=data['customer_id'],
-        number_of_guests=data['number_of_guests'],
-        bid_status=data['bid_status'],
-        user_id=data['user_id'],
-        service_type=data['service_type'],
-        start_time=start_time,  # Timezone-aware DateTime
-        end_time=end_time       # Timezone-aware DateTime
-    )
+    try:
+        new_booking = Booking(
+            requested_date=requested_date,
+            event_location=data['event_location'],
+            event_type=data['event_type'],
+            customer_id=data['customer_id'],
+            number_of_guests=data['number_of_guests'],
+            bid_status=data['bid_status'],
+            user_id=data['user_id'],
+            service_type=data['service_type'],
+            start_time=start_time,  # Timezone-aware DateTime
+            end_time=end_time       # Timezone-aware DateTime
+        )
+        logging.debug("Booking object created successfully.")
+    except KeyError as e:
+        logging.error(f"Missing key in booking data: {e}")
+        return jsonify({'error': f"Missing key in booking data: {e}"}), 400
 
     try:
         # Start a transaction to ensure both booking and calendar creation are atomic
@@ -343,6 +357,7 @@ def create_booking():
 
             # Booking ID is now accessible after flush
             booking_id = new_booking.booking_id
+            logging.debug(f"Booking ID after flush: {booking_id}")
 
             # Create the calendar event
             calendar_data = {
@@ -351,14 +366,20 @@ def create_booking():
                 'event_type': data['event_type'],
                 'start_time': start_time_str,
                 'end_time': end_time_str,
-                'booking_id': booking_id
+                'booking_id': booking_id,
+                'user_id': data['user_id']  # Ensure this is included
             }
+            logging.debug(f"Calendar data: {calendar_data}")
 
             # Post the calendar event creation
-            calendar_response = requests.post("https://cydsrenderbackend.onrender.com/calendar", json=calendar_data)
-            if calendar_response.status_code != 200:
+            calendar_response = requests.post("http://127.0.0.1:5000/calendar", json=calendar_data)
+            logging.debug(f"Calendar response status code: {calendar_response.status_code}")
+            
+            if calendar_response.status_code not in [200, 201]:
+                logging.error(f"Failed to create calendar event. Status code: {calendar_response.status_code}")
                 db.session.rollback()  # Rollback if calendar event creation fails
                 return jsonify({'error': 'Failed to create calendar event'}), 400
+
 
             # Assuming the calendar response includes an event_id
             calendar_event_id = calendar_response.json().get('event_id')
@@ -366,13 +387,18 @@ def create_booking():
                 # Save the event_id to the booking
                 new_booking.event_id = calendar_event_id
                 db.session.commit()  # Commit to save event_id to the booking
+                logging.debug(f"Saved calendar event ID: {calendar_event_id} to booking.")
 
         return jsonify(new_booking.to_dict()), 201
-    except IntegrityError:
+
+    except IntegrityError as e:
+        logging.error(f"IntegrityError: {str(e)}")
         db.session.rollback()
         return jsonify({'error': 'Failed to add booking.'}), 400
-
-
+    except Exception as e:
+        logging.error(f"Unexpected error: {str(e)}")
+        db.session.rollback()
+        return jsonify({'error': 'An unexpected error occurred.'}), 500
     
 # Edit an existing booking
 @main.route('/bookings/<int:booking_id>', methods=['PUT'])
@@ -688,21 +714,30 @@ def delete_booking_and_calendar(booking_id):
             # Get the booking
             booking = Booking.query.get(booking_id)
             if not booking:
+                logger.error(f"Booking {booking_id} not found in the database")
                 return jsonify({"error": "Booking not found"}), 404
-            
-            # Delete associated calendar events (if any)
+
+            # Fetch associated calendar events for the booking
             calendar_events = Calendar.query.filter_by(booking_id=booking_id).all()
+            if not calendar_events:
+                logger.error(f"No calendar events found for booking {booking_id}")
+                return jsonify({"error": "No associated calendar events found"}), 404
+            
+            # Step 1: Delete all associated calendar events first
             for calendar_event in calendar_events:
                 db.session.delete(calendar_event)
             
-            # Delete the booking
+            # Step 2: Now, delete the booking itself
             db.session.delete(booking)
-            
-            # Commit the transaction
+
+            # Commit the transaction to apply both deletions
             db.session.commit()
         
+        logger.info(f"Booking {booking_id} and associated calendar events deleted successfully")
         return jsonify({"message": "Booking and associated calendar events deleted successfully"}), 200
-    
+
     except SQLAlchemyError as e:
-        db.session.rollback()  # Rollback in case of an error
+        # Rollback in case of an error
+        db.session.rollback()  
+        logger.error(f"Error deleting booking and calendar event: {str(e)}")
         return jsonify({"error": f"Error deleting booking and calendar event: {str(e)}"}), 500
