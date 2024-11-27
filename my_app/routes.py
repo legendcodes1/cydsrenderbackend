@@ -372,7 +372,7 @@ def create_booking():
             logging.debug(f"Calendar data: {calendar_data}")
 
             # Post the calendar event creation
-            calendar_response = requests.post("http://127.0.0.1:5000/calendar", json=calendar_data)
+            calendar_response = requests.post("https://cydsrenderbackend.onrender.com/calendar", json=calendar_data)
             logging.debug(f"Calendar response status code: {calendar_response.status_code}")
             
             if calendar_response.status_code not in [200, 201]:
