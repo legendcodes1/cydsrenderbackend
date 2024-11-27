@@ -1,4 +1,4 @@
-web: gunicorn my_app:create_app
+web: gunicorn --timeout 120 my_app:create_app
 
 
 
