@@ -47,34 +47,28 @@ class Booking(db.Model):
     bid_status = db.Column(db.String)
     user_id = db.Column(db.Integer, db.ForeignKey('User.user_id'))
     
-    # Define the foreign key for the Calendar relationship
-    event_id = db.Column(db.Integer, db.ForeignKey('Calendar.event_id'), nullable=True)
-
     # Change to DateTime with timezone
     start_time = db.Column(db.DateTime(timezone=True), nullable=False)
     end_time = db.Column(db.DateTime(timezone=True), nullable=False)
     
     service_type = db.Column(db.String, nullable=True)
 
-    # Relationship to Calendar with cascade rule applied here
-    calendar = db.relationship('Calendar', backref='booking', uselist=False, cascade='all, delete-orphan')
-
     def to_dict(self):
+        # Format the start_time and end_time as strings with timezone if they are not None
         return {
             'booking_id': self.booking_id,
-            'requested_date': self.requested_date.strftime('%Y-%m-%d'),
+            'requested_date': self.requested_date.strftime('%Y-%m-%d'),  # Format the date as a string
             'event_location': self.event_location,
             'event_type': self.event_type,
             'customer_id': self.customer_id,
             'number_of_guests': self.number_of_guests,
             'bid_status': self.bid_status,
             'user_id': self.user_id,
-            'start_time': self.start_time.isoformat() if self.start_time else None,
-            'end_time': self.end_time.isoformat() if self.end_time else None,
+            'start_time': self.start_time.isoformat() if self.start_time else None,  # ISO format with timezone
+            'end_time': self.end_time.isoformat() if self.end_time else None,  # ISO format with timezone
             'service_type': self.service_type
         }
-
-
+    
 class Service(db.Model):
     __tablename__ = 'Service'
     service_id = db.Column(db.Integer, primary_key=True)
@@ -152,6 +146,7 @@ class CateringBid(db.Model):
             'booking_id': self.booking_id,
         }
 
+
 class Calendar(db.Model):
     __tablename__ = 'Calendar'
     
@@ -161,16 +156,14 @@ class Calendar(db.Model):
     event_status = db.Column(db.String, nullable=False)
     event_type = db.Column(db.String, nullable=False)
     user_id = db.Column(db.Integer, db.ForeignKey('User.user_id'))
-    
-    # Foreign key to Booking model
     booking_id = db.Column(db.Integer, db.ForeignKey('Bookings.booking_id'))
     
-    # Relationship to the Booking model without cascade here
-    booking = db.relationship('Booking', backref='calendar', uselist=False, foreign_keys=[booking_id])
+    # Relationship to the Booking model
+    booking = db.relationship('Booking', backref='calendar', uselist=False)  # Adds 'booking' attribute to access Booking object
 
     # Change to DateTime with timezone
-    start_time = db.Column(db.DateTime(timezone=True))
-    end_time = db.Column(db.DateTime(timezone=True))
+    start_time = db.Column(db.DateTime(timezone=True))  # Change to DateTime
+    end_time = db.Column(db.DateTime(timezone=True))    # Change to DateTime
 
     def to_dict(self):
         return {

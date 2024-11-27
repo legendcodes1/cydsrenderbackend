@@ -343,6 +343,9 @@ def create_booking():
         db.session.commit()
         print("Booking added to the session")
 
+        # Now the booking_id is correctly assigned after the commit
+        booking_id = new_booking.booking_id
+
         # Create the associated calendar event with start_time and end_time included
         calendar_data = {
             'event_date': requested_date.strftime('%Y-%m-%d'),  # Convert date to string
@@ -350,7 +353,7 @@ def create_booking():
             'event_type': data['event_type'],
             'start_time': start_time_str,  # Send just the time part in %H:%M:%S format
             'end_time': end_time_str,      # Send just the time part in %H:%M:%S format
-            'booking_id': new_booking.booking_id
+            'booking_id': booking_id
         }
 
         # Make the POST request to the calendar service
@@ -432,14 +435,38 @@ def update_booking(booking_id):
 # Delete an existing booking
 @main.route('/bookings/<int:booking_id>', methods=['DELETE'])
 def delete_booking(booking_id):
-    booking = Booking.query.get(booking_id)
-    if not booking:
-        return jsonify({'error': 'Booking not found'}), 404
+    try:
+        # Retrieve the booking record
+        booking = Booking.query.get(booking_id)
+        
+        if not booking:
+            return jsonify({'error': 'Booking not found'}), 404
+        
+        # Retrieve the associated calendar event
+        calendar_event = booking.calendar  # Since relationship is set, access directly
 
-    db.session.delete(booking)
-    db.session.commit()
-    return jsonify({'message': 'Booking deleted successfully'}), 200
+        if calendar_event:
+            # If the calendar event exists, delete it first
+            db.session.delete(calendar_event)
+            print(f"Calendar event {calendar_event.event_id} deleted.")
 
+        # Delete the booking after the calendar event is deleted
+        db.session.delete(booking)
+        print(f"Booking {booking.booking_id} deleted.")
+
+        # Commit the changes to the database
+        db.session.commit()
+        
+        return jsonify({'message': 'Booking and associated calendar event deleted successfully'}), 200
+
+    except IntegrityError:
+        db.session.rollback()
+        return jsonify({'error': 'Integrity error occurred while deleting booking and calendar event'}), 500
+
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+    
 # Fetch all calendar events
 @main.route('/calendar', methods=['GET'])
 def get_calendar_events():
@@ -645,3 +672,29 @@ def register():
     except Exception as e:
         db.session.rollback()
         return jsonify({'message': 'Error creating user', 'error': str(e)}), 500
+
+
+@main.route('/bookings_and_calendar/<int:booking_id>', methods=['DELETE'])
+def delete_booking_and_calendar(booking_id):
+    try:
+        # Start a transaction
+        with db.session.begin():
+            booking = Booking.query.get(booking_id)
+            if not booking:
+                return jsonify({"error": "Booking not found"}), 404
+            
+            # Delete associated calendar events (if any)
+            calendar_events = Calendar.query.filter_by(booking_id=booking_id).all()
+            for calendar_event in calendar_events:
+                db.session.delete(calendar_event)
+            
+            # Delete the booking
+            db.session.delete(booking)
+            
+            # Commit the transaction
+            db.session.commit()
+        
+        return jsonify({"message": "Booking and associated calendar events deleted successfully"}), 200
+    except SQLAlchemyError as e:
+        db.session.rollback()  # Rollback in case of an error
+        return jsonify({"error": "Error deleting booking and calendar event"}), 500
