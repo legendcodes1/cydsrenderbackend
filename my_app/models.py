@@ -47,6 +47,7 @@ class Booking(db.Model):
     bid_status = db.Column(db.String)
     user_id = db.Column(db.Integer, db.ForeignKey('User.user_id'))
     
+    # Define the foreign key for the Calendar relationship
     event_id = db.Column(db.Integer, db.ForeignKey('Calendar.event_id'), nullable=True)
 
     # Change to DateTime with timezone
@@ -70,7 +71,7 @@ class Booking(db.Model):
             'end_time': self.end_time.isoformat() if self.end_time else None,  # ISO format with timezone
             'service_type': self.service_type
         }
-    
+
 class Service(db.Model):
     __tablename__ = 'Service'
     service_id = db.Column(db.Integer, primary_key=True)
@@ -157,10 +158,12 @@ class Calendar(db.Model):
     event_status = db.Column(db.String, nullable=False)
     event_type = db.Column(db.String, nullable=False)
     user_id = db.Column(db.Integer, db.ForeignKey('User.user_id'))
+    
+    # Foreign key to Booking model
     booking_id = db.Column(db.Integer, db.ForeignKey('Bookings.booking_id'))
     
     # Relationship to the Booking model with cascade delete
-    booking = db.relationship('Booking', backref='calendar', uselist=False, cascade='all, delete-orphan')
+    booking = db.relationship('Booking', backref='calendar', uselist=False, cascade='all, delete-orphan', foreign_keys=[booking_id])
 
     # Change to DateTime with timezone
     start_time = db.Column(db.DateTime(timezone=True))  # Change to DateTime
