@@ -47,6 +47,8 @@ class Booking(db.Model):
     bid_status = db.Column(db.String)
     user_id = db.Column(db.Integer, db.ForeignKey('User.user_id'))
     
+    event_id = db.Column(db.Integer, db.ForeignKey('Calendar.event_id'), nullable=True)
+    
     # Change to DateTime with timezone
     start_time = db.Column(db.DateTime(timezone=True), nullable=False)
     end_time = db.Column(db.DateTime(timezone=True), nullable=False)
