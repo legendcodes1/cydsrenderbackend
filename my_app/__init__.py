@@ -20,10 +20,10 @@ def create_app():
     # Connection pooling settings through SQLAlchemy engine options
     app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
         'pool_size': 10,    # Number of connections to keep in the pool
-        'max_overflow': 20, # Allow extra connections beyond pool_size
-        'pool_timeout': 30, # Timeout in seconds to wait for a connection from the pool
+        'max_overflow': 20,  # Allow extra connections beyond pool_size
+        'pool_timeout': 30,  # Timeout in seconds to wait for a connection from the pool
         'pool_recycle': 3600,  # Recycle connections after 3600 seconds (1 hour)
-        'connect_args': {'sslmode': 'require'}  # SSL mode if necessary
+        # SSL mode disabled by removing 'connect_args'
     }
 
     db.init_app(app)
