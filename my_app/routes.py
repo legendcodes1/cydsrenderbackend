@@ -354,7 +354,7 @@ def create_booking():
         }
 
         # Make the POST request to the calendar service
-        calendar_response = requests.post("http://127.0.0.1:5000/calendar", json=calendar_data)
+        calendar_response = requests.post("https://cydsrenderbackend.onrender.com/calendar", json=calendar_data)
         if calendar_response.status_code != 200:
             print("Failed to create calendar event:", calendar_response.text)
 
@@ -579,17 +579,22 @@ def delete_event(event_id):
         if not event:
             return jsonify({'error': 'Event not found'}), 404
         
-        # If found, delete the event
+        # Delete the event
         db.session.delete(event)
+
+        # Query and delete the associated booking
+        booking = Booking.query.filter_by(event_id=event_id).first()  # Assuming event_id is a foreign key in Booking
+        if booking:
+            db.session.delete(booking)
+        
         db.session.commit()
         
-        return jsonify({'message': 'Event deleted successfully'}), 200
+        return jsonify({'message': 'Event and associated booking deleted successfully'}), 200
     
     except Exception as e:
-        print(f"Error deleting event: {e}")
+        print(f"Error deleting event and booking: {e}")
         db.session.rollback()  # Rollback in case of an error
-        return jsonify({'error': 'Failed to delete event'}), 500
-    
+        return jsonify({'error': 'Failed to delete event and booking'}), 500
 
 
 @main.route('/login', methods=['POST'])
