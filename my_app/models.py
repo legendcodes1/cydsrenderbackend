@@ -2,6 +2,7 @@ from . import db
 from datetime import datetime
 from sqlalchemy import Sequence
 import pytz
+from sqlalchemy import UniqueConstraint
 
 class Customer(db.Model):
     __tablename__ = 'Customers'
@@ -9,14 +10,20 @@ class Customer(db.Model):
     name = db.Column(db.Text, nullable=False)
     email = db.Column(db.Text, nullable=False, unique=True)
     phone_number = db.Column(db.Text, nullable=False)
+    is_active = db.Column(db.Boolean, default=True)  # Default to active
+
+    # Relationship with Booking model
+    bookings = db.relationship('Booking', back_populates='customer')
 
     def to_dict(self):
         return {
             'customer_id': self.customer_id,
             'name': self.name,
             'email': self.email,
-            'phone_number': self.phone_number
+            'phone_number': self.phone_number,
+            'is_active': self.is_active
         }
+
     
 class User(db.Model):
     __tablename__ = 'User'
@@ -42,17 +49,19 @@ class Booking(db.Model):
     requested_date = db.Column(db.Date, nullable=False)
     event_location = db.Column(db.String)
     event_type = db.Column(db.String)
-    customer_id = db.Column(db.Integer, db.ForeignKey('Customers.customer_id'))
+    customer_id = db.Column(db.BigInteger, db.ForeignKey('Customers.customer_id'))
     number_of_guests = db.Column(db.Integer)
     bid_status = db.Column(db.String)
     user_id = db.Column(db.Integer, db.ForeignKey('User.user_id'))
-    event_id = db.Column(db.BigInteger, db.ForeignKey('Calendar.event_id'), nullable=True)
-
+    
     # Change to DateTime with timezone
     start_time = db.Column(db.DateTime(timezone=True), nullable=False)
     end_time = db.Column(db.DateTime(timezone=True), nullable=False)
     
     service_type = db.Column(db.String, nullable=True)
+    
+    # Establish relationship with Customer
+    customer = db.relationship('Customer', back_populates='bookings')
 
     def to_dict(self):
         # Format the start_time and end_time as strings with timezone if they are not None
@@ -67,9 +76,9 @@ class Booking(db.Model):
             'user_id': self.user_id,
             'start_time': self.start_time.isoformat() if self.start_time else None,  # ISO format with timezone
             'end_time': self.end_time.isoformat() if self.end_time else None,  # ISO format with timezone
-            'service_type': self.service_type,
-            'event_id': self.event_id # Set the event_id if provided
+            'service_type': self.service_type
         }
+
     
 class Service(db.Model):
     __tablename__ = 'Service'
@@ -95,7 +104,7 @@ class Service(db.Model):
 class MealPrepBid(db.Model):
     __tablename__ = 'Meal_Prep_Bids'
     
-    meal_bid_id = db.Column(db.BigInteger, primary_key=True, autoincrement=True) 
+    meal_bid_id = db.Column(db.BigInteger, primary_key=True, autoincrement=True)
     created_at = db.Column(db.DateTime(timezone=True), default=db.func.current_timestamp(), nullable=False)
     bid_status = db.Column(db.Text, nullable=False)
     miles = db.Column(db.BigInteger, nullable=False)
@@ -103,8 +112,13 @@ class MealPrepBid(db.Model):
     estimated_groceries = db.Column(db.BigInteger, nullable=False)
     estimated_bid_price = db.Column(db.BigInteger, nullable=True)
     supplies = db.Column(db.BigInteger, nullable=False)
+    foods = db.Column(db.String)
     booking_id = db.Column(db.BigInteger, db.ForeignKey('Bookings.booking_id'), nullable=False)
-    customer_id = db.Column(db.BigInteger, primary_key=True)
+    customer_id = db.Column(db.BigInteger, db.ForeignKey('Customers.customer_id'))  
+
+    __table_args__ = (
+        db.UniqueConstraint('booking_id', 'customer_id', name='_booking_customer_uc'),  # Enforce unique booking_id and customer_id pair
+    )
 
     def to_dict(self):
         return {
@@ -113,15 +127,18 @@ class MealPrepBid(db.Model):
             'bid_status': self.bid_status,
             'miles': self.miles,
             'service_fee': self.service_fee,
+            'foods': self.foods,
+            'estimated_bid_price': self.estimated_bid_price,
             'estimated_groceries': self.estimated_groceries,
             'supplies': self.supplies,
-            'booking_id': self.booking_id
+            'booking_id': self.booking_id,
+            'customer_id': self.customer_id
         }
 
 class CateringBid(db.Model):
     __tablename__ = 'Catering_Bids'
     
-    catering_bid_id = db.Column(db.BigInteger, primary_key=True, autoincrement=True)  # auto-increment
+    catering_bid_id = db.Column(db.BigInteger, primary_key=True, autoincrement=True)
     created_at = db.Column(db.DateTime(timezone=True), default=datetime.utcnow, nullable=False)
     bid_status = db.Column(db.String, nullable=False)
     miles = db.Column(db.BigInteger, nullable=True)
@@ -132,8 +149,11 @@ class CateringBid(db.Model):
     foods = db.Column(db.String)
     estimated_bid_price = db.Column(db.BigInteger, nullable=True)
     booking_id = db.Column(db.BigInteger, db.ForeignKey('Bookings.booking_id'), nullable=False)
-    customer_id = db.Column(db.BigInteger, primary_key=True)
-   
+    customer_id = db.Column(db.BigInteger, db.ForeignKey('Customers.customer_id')) 
+
+    __table_args__ = (
+        db.UniqueConstraint('booking_id', 'customer_id', name='_booking_customer_uc'),  # Enforce unique booking_id and customer_id pair
+    )
 
     def to_dict(self):
         return {
@@ -142,30 +162,33 @@ class CateringBid(db.Model):
             'bid_status': self.bid_status,
             'miles': self.miles,
             'service_fee': self.service_fee,
+            'foods': self.foods,
             'clean_up': self.clean_up,
+            'estimated_bid_price': self.estimated_bid_price,
             'decorations': self.decorations,
             'estimated_groceries': self.estimated_groceries,
             'booking_id': self.booking_id,
+            'customer_id': self.customer_id
         }
 
 
 class Calendar(db.Model):
     __tablename__ = 'Calendar'
-    
     event_id = db.Column(db.Integer, primary_key=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     event_date = db.Column(db.Date, nullable=False)
     event_status = db.Column(db.String, nullable=False)
     event_type = db.Column(db.String, nullable=False)
     user_id = db.Column(db.Integer, db.ForeignKey('User.user_id'))
+    customer_id = db.Column(db.Integer, db.ForeignKey('Customers.customer_id'))
     booking_id = db.Column(db.Integer, db.ForeignKey('Bookings.booking_id'))
     
-    # Relationship to the Booking model
-    booking = db.relationship('Booking', backref='calendar', uselist=False, foreign_keys=[booking_id])  # Explicit foreign key
-
-    # Change to DateTime with timezone
-    start_time = db.Column(db.DateTime(timezone=True))  # Change to DateTime
-    end_time = db.Column(db.DateTime(timezone=True))    # Change to DateTime
+    # Relationships
+    booking = db.relationship('Booking', backref='calendar', uselist=False, foreign_keys=[booking_id])
+    customer = db.relationship('Customer', backref='calendar', uselist=False, foreign_keys=[customer_id])
+    
+    start_time = db.Column(db.DateTime(timezone=True))
+    end_time = db.Column(db.DateTime(timezone=True))
 
     def to_dict(self):
         return {
@@ -176,6 +199,8 @@ class Calendar(db.Model):
             'event_type': self.event_type,
             'user_id': self.user_id,
             'booking_id': self.booking_id,
+            'customer_id': self.customer_id,
+            'customer_name': self.customer.name if self.customer else None,
             'start_time': self.start_time.isoformat() if self.start_time else None,
             'end_time': self.end_time.isoformat() if self.end_time else None
         }
